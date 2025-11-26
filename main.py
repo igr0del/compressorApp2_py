@@ -27,7 +27,10 @@ try:
 except ImportError:  # pragma: no cover - опциональная зависимость для дашборда
     psutil = None
 
-import rawpy
+try:
+    import rawpy
+except ImportError:  # pragma: no cover - опциональная зависимость для RAW
+    rawpy = None
 from PIL import Image
 from pillow_heif import register_heif_opener
 
@@ -66,7 +69,7 @@ def set_compression_params(target_size_kb: int, min_long_side: int, max_start_lo
 def is_image_file(path: Path) -> bool:
     """Проверяем по расширению, что это поддерживаемое изображение."""
 
-    return path.suffix.lower() in {
+    base_exts = {
         ".jpg",
         ".jpeg",
         ".png",
@@ -76,9 +79,11 @@ def is_image_file(path: Path) -> bool:
         ".tiff",
         ".tif",
         ".gif",
-        ".dng",
-        ".arw",  # RAW (DNG, Sony ARW)
     }
+
+    raw_exts = {".dng", ".arw"} if rawpy else set()
+
+    return path.suffix.lower() in base_exts | raw_exts
 
 
 def open_image_any_format(input_path: Path) -> Image.Image:
@@ -87,6 +92,12 @@ def open_image_any_format(input_path: Path) -> Image.Image:
     ext = input_path.suffix.lower()
 
     if ext in {".dng", ".arw"}:
+        if rawpy is None:
+            raise RuntimeError(
+                "RAW-форматы требуют зависимости rawpy: установите её или "
+                "удалите RAW-файлы из входной папки"
+            )
+
         with rawpy.imread(str(input_path)) as raw:
             rgb = raw.postprocess()
         return Image.fromarray(rgb, "RGB")
@@ -279,6 +290,11 @@ def process_folder(
     """Основной цикл обработки для консоли и GUI."""
 
     log = on_message or (lambda msg: print(msg, flush=True))
+
+    if rawpy is None:
+        log(
+            "RAW-файлы (.dng/.arw) будут пропущены: зависимость rawpy не установлена."
+        )
 
     all_files = collect_files(input_dir)
     total_found = len(all_files)

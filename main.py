@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
+
 """Графическая утилита для сжатия изображений в WEBP.
 
 Основные возможности:
@@ -31,6 +33,11 @@ from pillow_heif import register_heif_opener
 
 # Регистрируем поддержку HEIC/HEIF для Pillow
 register_heif_opener()
+
+try:
+    RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
+except AttributeError:  # Pillow < 10 совместимость
+    RESAMPLE_LANCZOS = Image.LANCZOS
 
 # Целевой размер (может быть изменён из GUI)
 TARGET_SIZE_KB = 300
@@ -131,7 +138,7 @@ def compress_image_to_webp(
                 "   - Изображение слишком большое (long_side=%s), "
                 "сразу уменьшаю до %sx%s" % (long_side, new_w, new_h)
             )
-            base_img = base_img.resize((new_w, new_h), Image.LANCZOS)
+            base_img = base_img.resize((new_w, new_h), RESAMPLE_LANCZOS)
             base_w, base_h = base_img.size
             log(f"   - Новый базовый размер: {base_w}x{base_h}")
         else:
@@ -154,7 +161,7 @@ def compress_image_to_webp(
                 new_w = max(1, int(base_w * scale))
                 new_h = max(1, int(base_h * scale))
                 log(f"     · Уменьшаю размер: {new_w}x{new_h}")
-                img = base_img.resize((new_w, new_h), Image.LANCZOS)
+                img = base_img.resize((new_w, new_h), RESAMPLE_LANCZOS)
             else:
                 img = base_img
                 log(f"     · Использую базовый размер: {base_w}x{base_h}")

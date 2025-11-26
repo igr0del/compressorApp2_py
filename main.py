@@ -8,7 +8,7 @@ from __future__ import annotations
 * Тёмная тема с дашбордом нагрузки системы и прогресс-барами.
 * Кнопки Старт, Стоп и Отмена (сброс состояния).
 * Окно логов с чёрным фоном и зелёным текстом, отображающее ход работы.
-* Поддержка исходников JPG/PNG/HEIC/RAW и др., сохранение структуры каталогов.
+* Поддержка исходников JPG/PNG/HEIC и др., сохранение структуры каталогов.
 * Готово к сборке в исполняемый файл (единая точка входа, минимальные зависимости).
 """
 
@@ -28,14 +28,20 @@ except ImportError:  # pragma: no cover - опциональная зависи�
     psutil = None
 
 try:
-    import rawpy
-except ImportError:  # pragma: no cover - опциональная зависимость для RAW
-    rawpy = None
-from PIL import Image
-from pillow_heif import register_heif_opener
+    from PIL import Image
+except ImportError as exc:  # pragma: no cover - критичная зависимость
+    raise SystemExit(
+        "Для работы требуется Pillow (pip install pillow)."
+    ) from exc
+
+try:
+    from pillow_heif import register_heif_opener
+except ImportError:  # pragma: no cover - опциональная поддержка HEIC
+    register_heif_opener = None
 
 # Регистрируем поддержку HEIC/HEIF для Pillow
-register_heif_opener()
+if register_heif_opener:
+    register_heif_opener()
 
 try:
     RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
@@ -81,26 +87,14 @@ def is_image_file(path: Path) -> bool:
         ".gif",
     }
 
-    raw_exts = {".dng", ".arw"} if rawpy else set()
+    if register_heif_opener is None:
+        base_exts -= {".heic", ".heif"}
 
-    return path.suffix.lower() in base_exts | raw_exts
+    return path.suffix.lower() in base_exts
 
 
 def open_image_any_format(input_path: Path) -> Image.Image:
     """Открывает изображение разных форматов."""
-
-    ext = input_path.suffix.lower()
-
-    if ext in {".dng", ".arw"}:
-        if rawpy is None:
-            raise RuntimeError(
-                "RAW-форматы требуют зависимости rawpy: установите её или "
-                "удалите RAW-файлы из входной папки"
-            )
-
-        with rawpy.imread(str(input_path)) as raw:
-            rgb = raw.postprocess()
-        return Image.fromarray(rgb, "RGB")
 
     return Image.open(input_path)
 
@@ -290,11 +284,6 @@ def process_folder(
     """Основной цикл обработки для консоли и GUI."""
 
     log = on_message or (lambda msg: print(msg, flush=True))
-
-    if rawpy is None:
-        log(
-            "RAW-файлы (.dng/.arw) будут пропущены: зависимость rawpy не установлена."
-        )
 
     all_files = collect_files(input_dir)
     total_found = len(all_files)
